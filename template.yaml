@@ -1,0 +1,202 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  appointment
+
+  Sample SAM Template for appointment
+  
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 3
+    MemorySize: 128
+
+Resources:
+# DynamoDB Table
+  AppointmentTable:
+    Type: AWS::DynamoDB::Table
+    Properties: 
+      TableName: Appointment
+      AttributeDefinitions: 
+        - AttributeName: id
+          AttributeType: S
+      KeySchema: 
+        - AttributeName: id
+          KeyType: HASH
+      ProvisionedThroughput: 
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+# Appointment API
+  AppointmentApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Dev
+      Cors:
+        AllowMethods: "'POST, GET, PUT, DELETE'"
+        AllowHeaders: "'*'"
+        AllowOrigin: "'*'"
+        MaxAge: "'600'"
+      DefinitionBody:
+        'Fn::Transform':
+          Name: 'AWS::Include'
+          Parameters:
+            Location: './api.yaml'
+
+  ApiGwExecutionRole: 
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "apigateway.amazonaws.com"
+                - "lambda.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+
+  ApiGwExecutionPolicy: 
+    Type: "AWS::IAM::Policy"
+    Properties: 
+      PolicyName: "apigw-execution-policy"
+      PolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          Action:
+            - lambda:*
+          Effect: Allow
+          Resource:
+            - !GetAtt GetAppointments.Arn
+            - !GetAtt InsertAppointment.Arn
+            - !GetAtt UpdateAppointment.Arn
+            - !GetAtt DeleteAppointment.Arn
+            
+      Roles: 
+        - Ref: "ApiGwExecutionRole"
+
+  GetAppointments:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: functions/
+      Handler: getAppointments.getAppointments
+      Runtime: nodejs18.x
+      Environment:
+        Variables:
+          APPOINTMENT_TABLE: !Ref AppointmentTable
+      Policies:
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:PartiQLSelect
+              - dynamodb:PartiQLInsert 
+              - dynamodb:PartiQLUpdate
+              - dynamodb:PartiQLDelete
+            Resource:
+              - !Sub 
+                - 'arn:aws:dynamodb:*:*:table/${Table}'
+                - { Table: !Ref AppointmentTable }
+          - Effect: Allow
+            Action:
+              - logs:*
+            Resource:
+              - "*"    
+  InsertAppointment:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: functions/
+      Handler: insertAppointment.insertAppointment
+      Runtime: nodejs18.x
+      Environment:
+        Variables:
+          APPOINTMENT_TABLE: !Ref AppointmentTable
+      Policies:
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:PartiQLInsert
+            Resource:
+              - !Sub 
+                - 'arn:aws:dynamodb:*:*:table/${Table}'
+                - { Table: !Ref AppointmentTable }
+          - Effect: Allow
+            Action:
+              - logs:*
+            Resource:
+              - "*"    
+  UpdateAppointment:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: functions/
+      Handler: updateAppointment.updateAppointment
+      Runtime: nodejs18.x
+      Environment:
+        Variables:
+          APPOINTMENT_TABLE: !Ref AppointmentTable
+      Policies:
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:PartiQLUpdate
+            Resource:
+              - !Sub 
+                - 'arn:aws:dynamodb:*:*:table/${Table}'
+                - { Table: !Ref AppointmentTable }
+          - Effect: Allow
+            Action:
+              - logs:*
+            Resource:
+              - "*"    
+
+  DeleteAppointment:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: functions/
+      Handler: deleteAppointment.deleteAppointment
+      Runtime: nodejs18.x
+      Environment:
+        Variables:
+          APPOINTMENT_TABLE: !Ref AppointmentTable
+      Policies:
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:PartiQLDelete
+            Resource:
+              - !Sub 
+                - 'arn:aws:dynamodb:*:*:table/${Table}'
+                - { Table: !Ref AppointmentTable }
+          - Effect: Allow
+            Action:
+              - logs:*
+            Resource:
+              - "*"    
+Outputs:
+
+  DynamoDBTableName:
+    Description: "DynamoDB Table Name"
+    Value: !Ref AppointmentTable
+
+  GetAppointments:
+    Description: "GetAppointments Lambda Function ARN"
+    Value: !GetAtt GetAppointments.Arn
+
+  InsertAppointment:
+    Description: "InsertAppointment Lambda Function ARN"
+    Value: !GetAtt InsertAppointment.Arn
+
+  UpdateAppointment:
+    Description: "UpdateAppointment Lambda Function ARN"
+    Value: !GetAtt UpdateAppointment.Arn
+
+  DeleteAppointment:
+    Description: "DeleteAppointment Lambda Function ARN"
+    Value: !GetAtt DeleteAppointment.Arn
+
+  AppointmentApiEndpoint:
+    Description: "API Gateway endpoint URL for Dev stage for Appointment Get function"
+    Value: !Sub "https://${AppointmentApi}.execute-api.${AWS::Region}.amazonaws.com/Dev/appointment/"
+
+
